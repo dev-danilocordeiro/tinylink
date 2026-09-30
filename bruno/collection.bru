@@ -1,0 +1,16 @@
+script:pre-request {
+  // O rate limit é por IP (2/min, 10/h) e o backend confia no X-Forwarded-For.
+  // Um IP aleatório por requisição evita 429 enquanto se testa as outras rotas.
+  const octet = () => Math.floor(Math.random() * 254) + 1;
+  req.setHeader("X-Forwarded-For", `10.${octet()}.${octet()}.${octet()}`);
+}
+
+docs {
+  # TinyLink
+
+  Selecione o ambiente **Local** e rode a collection inteira pelo Runner, na ordem.
+  As requisições salvam `shortCode`, `aliasCode` e `expiredCode` em variáveis de runtime
+  para as seguintes usarem.
+
+  Os dados ficam em memória: reiniciar o backend apaga os links criados.
+}

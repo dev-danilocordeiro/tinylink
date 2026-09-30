@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +18,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -69,7 +69,7 @@ public class UrlShortenerService {
         urlMappings.put(shortCode, urlData);
         clickAnalytics.put(shortCode, new ArrayList<>());
 
-        cacheUrl(shortCode, request.getOriginalUrl());
+        cacheUrl(shortCode, request.getOriginalUrl(), request.getExpiresAt());
 
         log.info("Created short URL: {} -> {}", shortCode, request.getOriginalUrl());
 
@@ -87,9 +87,21 @@ public class UrlShortenerService {
         return normalizedBaseUrl + "/api/" + shortCode;
     }
 
-    private void cacheUrl(String shortCode, String originalUrl) {
+    private void cacheUrl(String shortCode, String originalUrl, LocalDateTime expiresAt) {
+        // A cache hit skips the expiry check, so the entry must never outlive the link.
+        Duration ttl = Duration.ofMinutes(cacheTtlMinutes);
+        if (expiresAt != null) {
+            Duration untilExpiry = Duration.between(LocalDateTime.now(), expiresAt);
+            if (untilExpiry.isNegative() || untilExpiry.isZero()) {
+                return;
+            }
+            if (untilExpiry.compareTo(ttl) < 0) {
+                ttl = untilExpiry;
+            }
+        }
+
         try {
-            redisTemplate.opsForValue().set("url:" + shortCode, originalUrl, cacheTtlMinutes, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set("url:" + shortCode, originalUrl, ttl);
         }  catch (Exception e) {
             log.warn("Failed to cache url for: {}:{}", shortCode, e.getMessage());
         }
@@ -133,7 +145,7 @@ public class UrlShortenerService {
                 urlData.setActive(false);
                 return Optional.empty();
             }
-            cacheUrl(shortCode, urlData.getOriginalUrl());
+            cacheUrl(shortCode, urlData.getOriginalUrl(), urlData.getExpiresAt());
             return Optional.of(urlData.getOriginalUrl());
         }
         return Optional.empty();

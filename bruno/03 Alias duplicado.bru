@@ -1,0 +1,32 @@
+meta {
+  name: Alias duplicado
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/shorten
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "originalUrl": "https://example.com",
+    "customAlias": "{{aliasCode}}"
+  }
+}
+
+tests {
+  test("retorna 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+
+  test("explica que o alias já existe", function () {
+    expect(res.body.error).to.contain("Custom alias already exists");
+  });
+}
+
+docs {
+  Depende de **Encurtar URL com alias** ter rodado antes.
+}

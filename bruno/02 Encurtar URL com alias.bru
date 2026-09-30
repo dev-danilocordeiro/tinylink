@@ -1,0 +1,33 @@
+meta {
+  name: Encurtar URL com alias
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/shorten
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "originalUrl": "https://spring.io",
+    "customAlias": "{{aliasCode}}"
+  }
+}
+
+script:pre-request {
+  // Sufixo aleatório para a requisição poder rodar várias vezes sem reiniciar o backend.
+  bru.setVar("aliasCode", `meu-link-${Date.now().toString(36)}`);
+}
+
+tests {
+  test("retorna 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("usa o alias informado como shortCode", function () {
+    expect(res.body.shortCode).to.equal(bru.getVar("aliasCode"));
+  });
+}

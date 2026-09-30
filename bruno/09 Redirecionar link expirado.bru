@@ -1,0 +1,25 @@
+meta {
+  name: Redirecionar link expirado
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/{{expiredCode}}
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  req.setMaxRedirects(0);
+}
+
+tests {
+  test("retorna 404 para link expirado", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+}
+
+docs {
+  Depende de **Criar link já expirado**.
+}

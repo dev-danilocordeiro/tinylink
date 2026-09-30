@@ -1,0 +1,37 @@
+meta {
+  name: Encurtar URL
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/shorten
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "originalUrl": "https://github.com/dev-danilocordeiro/tinylink"
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar("shortCode", res.body.shortCode);
+  }
+}
+
+tests {
+  test("retorna 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("gera um código de 6 caracteres base62", function () {
+    expect(res.body.shortCode).to.match(/^[0-9a-zA-Z]{6}$/);
+  });
+
+  test("shortUrl aponta para /api/{shortCode}", function () {
+    expect(res.body.shortUrl).to.match(new RegExp(`/api/${res.body.shortCode}$`));
+  });
+}

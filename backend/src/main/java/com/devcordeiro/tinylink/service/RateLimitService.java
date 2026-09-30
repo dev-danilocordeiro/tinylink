@@ -7,6 +7,7 @@ import org.apache.catalina.util.RateLimiter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -19,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 public class RateLimitService {
 
     private final RedisTemplate<String, Object> redisTemplate;
+    private final ObjectMapper objectMapper;
 
     @Value("${tinylink.rate-limit.requests-per-minute}")
     private int requestsPerMinute;
@@ -96,7 +98,12 @@ public class RateLimitService {
 
     private RateLimitData getRateLimitDataFromRedis(String key) {
         try {
-            return (RateLimitData) redisTemplate.opsForValue().get(key);
+            Object value = redisTemplate.opsForValue().get(key);
+            if (value == null || value instanceof RateLimitData) {
+                return (RateLimitData) value;
+            }
+            // The serializer stores no type info, so the value comes back as a Map.
+            return objectMapper.convertValue(value, RateLimitData.class);
          } catch (Exception e) {
             log.warn("Failed to load rate limit data from redis {}", e.getMessage());
             return null;
