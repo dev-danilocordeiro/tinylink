@@ -82,7 +82,7 @@ public class RateLimitService {
 
     private boolean isWithinMinuteWindow(RateLimitData data, LocalDateTime now) {
         return data.getMinuteWindowStart() != null && ChronoUnit.MINUTES.between(
-                data.getHourWindowStart(), now
+                data.getMinuteWindowStart(), now
         ) < 1;
     }
 
@@ -103,7 +103,7 @@ public class RateLimitService {
         }
     }
 
-    public int getRemainningRequests(String clientIp) {
+    public int getRemainingRequests(String clientIp) {
         String key = REDIS_KEY_PREFIX + clientIp;
         RateLimitData data = getRateLimitDataFromRedis(key);
 

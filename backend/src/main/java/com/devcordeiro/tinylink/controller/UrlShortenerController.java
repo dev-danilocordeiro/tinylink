@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
-@Service
 @RequestMapping("/api")
 public class UrlShortenerController {
 
@@ -35,7 +34,7 @@ public class UrlShortenerController {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(Map.of(
                             "error", "Rate limit exceeded",
-                            "remainingRequests", rateLimitService.getRemainningRequests(clientIp),
+                            "remainingRequests", rateLimitService.getRemainingRequests(clientIp),
                             "timeUntilReset", rateLimitService.getTimeUntilReset(clientIp)
                     ));
         }
@@ -43,8 +42,10 @@ public class UrlShortenerController {
         try {
             ShortenUrlResponse response = urlShortenerService.shortenUrl(request, clientIp);
             return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }
     }
 
