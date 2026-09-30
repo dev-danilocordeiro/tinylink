@@ -1,11 +1,13 @@
 package com.devcordeiro.tinylink.controller;
 
+import com.devcordeiro.tinylink.dto.ShortenUrlRequest;
 import com.devcordeiro.tinylink.dto.ShortenUrlResponse;
 import com.devcordeiro.tinylink.exception.AliasAlreadyExistsException;
 import com.devcordeiro.tinylink.service.RateLimitService;
 import com.devcordeiro.tinylink.service.UrlShortenerService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.HttpHeaders;
@@ -14,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -122,6 +125,49 @@ class UrlShortenerControllerTest {
                         {"originalUrl": "https://example.com", "customAlias": ""}
                         """))
                 .hasStatus(HttpStatus.OK);
+    }
+
+    @Test
+    void expiresAtWithAnOffsetIsConvertedToTheSameInstant() {
+        when(urlShortenerService.shortenUrl(any(), anyString())).thenReturn(
+                ShortenUrlResponse.builder().shortCode("abc123").build());
+
+        assertThat(mvc.post().uri("/api/shorten")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"originalUrl": "https://example.com", "expiresAt": "2030-01-01T10:00:00-03:00"}
+                        """))
+                .hasStatus(HttpStatus.OK);
+
+        ArgumentCaptor<ShortenUrlRequest> request = ArgumentCaptor.forClass(ShortenUrlRequest.class);
+        verify(urlShortenerService).shortenUrl(request.capture(), anyString());
+        assertThat(request.getValue().getExpiresAt()).isEqualTo(Instant.parse("2030-01-01T13:00:00Z"));
+    }
+
+    @Test
+    void expiresAtWithoutAnOffsetIsRejected() {
+        assertThat(mvc.post().uri("/api/shorten")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"originalUrl": "https://example.com", "expiresAt": "2030-01-01T10:00:00"}
+                        """))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .hasContentTypeCompatibleWith(PROBLEM_JSON)
+                .bodyJson()
+                .satisfies(json -> {
+                    assertThat(json).extractingPath("$.title").isEqualTo("Invalid request");
+                    assertThat(json).extractingPath("$.errors[0].field").isEqualTo("expiresAt");
+                    assertThat(json).extractingPath("$.errors[0].message").asString().contains("with an offset");
+                });
+    }
+
+    @Test
+    void malformedJsonStillReturnsBadRequestProblem() {
+        assertThat(mvc.post().uri("/api/shorten")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{not json"))
+                .hasStatus(HttpStatus.BAD_REQUEST)
+                .hasContentTypeCompatibleWith(PROBLEM_JSON);
     }
 
     @Test

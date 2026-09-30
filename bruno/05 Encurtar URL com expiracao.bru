@@ -18,9 +18,9 @@ body:json {
 }
 
 script:pre-request {
-  // LocalDateTime no backend: ISO sem fuso. Daqui a 7 dias.
+  // O backend exige data com fuso (Instant). toISOString() manda em UTC, com "Z". Daqui a 7 dias.
   const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  bru.setVar("expiresAt", in7Days.toISOString().slice(0, 19));
+  bru.setVar("expiresAt", in7Days.toISOString());
 }
 
 tests {
@@ -28,7 +28,7 @@ tests {
     expect(res.getStatus()).to.equal(200);
   });
 
-  test("devolve o expiresAt enviado", function () {
-    expect(res.body.expiresAt).to.contain(bru.getVar("expiresAt"));
+  test("devolve o mesmo instante enviado em expiresAt", function () {
+    expect(new Date(res.body.expiresAt).getTime()).to.equal(new Date(bru.getVar("expiresAt")).getTime());
   });
 }

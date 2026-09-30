@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -19,8 +19,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class UrlData {
     private String originalUrl;
     private String shortCode;
-    private LocalDateTime createdAt;
-    private LocalDateTime expiresAt;
+    private Instant createdAt;
+    private Instant expiresAt;
     private String createdBy;
     // Flipped by delete and the cleanup job while redirects read it on other threads.
     private volatile boolean active;

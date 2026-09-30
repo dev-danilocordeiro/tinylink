@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -86,7 +86,7 @@ public class UrlShortenerService {
                 .originalUrl(request.getOriginalUrl())
                 .shortCode(shortCode)
                 .expiresAt(request.getExpiresAt())
-                .createdAt(LocalDateTime.now(clock))
+                .createdAt(Instant.now(clock))
                 .createdBy(clientIp)
                 .active(true)
                 .build();
@@ -97,11 +97,11 @@ public class UrlShortenerService {
         return normalizedBaseUrl + "/api/" + shortCode;
     }
 
-    private void cacheUrl(String shortCode, String originalUrl, LocalDateTime expiresAt) {
+    private void cacheUrl(String shortCode, String originalUrl, Instant expiresAt) {
         // A cache hit skips the expiry check, so the entry must never outlive the link.
         Duration ttl = Duration.ofMinutes(cacheTtlMinutes);
         if (expiresAt != null) {
-            Duration untilExpiry = Duration.between(LocalDateTime.now(clock), expiresAt);
+            Duration untilExpiry = Duration.between(Instant.now(clock), expiresAt);
             if (untilExpiry.isNegative() || untilExpiry.isZero()) {
                 return;
             }
@@ -158,7 +158,7 @@ public class UrlShortenerService {
     }
 
     private boolean isExpired(UrlData urlData) {
-        return urlData.getExpiresAt() != null && urlData.getExpiresAt().isBefore(LocalDateTime.now(clock));
+        return urlData.getExpiresAt() != null && urlData.getExpiresAt().isBefore(Instant.now(clock));
     }
 
     private String getCachedUrl(String shortCode) {
@@ -174,7 +174,7 @@ public class UrlShortenerService {
         UrlData urlData = urlMappings.get(shortCode);
         if (urlData != null && urlData.isActive()) {
             urlData.recordClick(ClickEvent.builder()
-                    .timestamp(LocalDateTime.now(clock))
+                    .timestamp(Instant.now(clock))
                     .ipAddress(clientIp)
                     .userAgent(userAgent)
                     .referer(referer)
@@ -218,17 +218,18 @@ public class UrlShortenerService {
                         ClickEvent::getReferer, Collectors.summingInt( e -> 1)
                 ));
 
-        // TreeMap keeps hours and days in chronological order; "%02d" makes "09:00" sort before "10:00".
+        // Hours and days are bucketed in the server's time zone (TZ in docker-compose).
+        // TreeMap keeps them in chronological order; "%02d" makes "09:00" sort before "10:00".
         Map<String, Integer> clicksByHour = clickEvents.stream()
                 .collect(Collectors.groupingBy(
-                        c -> "%02d:00".formatted(c.getTimestamp().getHour()),
+                        c -> "%02d:00".formatted(c.getTimestamp().atZone(clock.getZone()).getHour()),
                         TreeMap::new,
                         Collectors.summingInt( e -> 1)
                 ));
 
         Map<String, Integer> clicksByDay = clickEvents.stream()
                 .collect(Collectors.groupingBy(
-                        c -> c.getTimestamp().toLocalDate().toString(),
+                        c -> c.getTimestamp().atZone(clock.getZone()).toLocalDate().toString(),
                         TreeMap::new,
                         Collectors.summingInt( e -> 1)
                 ));
@@ -275,7 +276,7 @@ public class UrlShortenerService {
 
     public void cleanupExpiredUrls() {
         int cleanedCount = 0;
-        LocalDateTime now = LocalDateTime.now(clock);
+        Instant now = Instant.now(clock);
 
         for (Map.Entry<String, UrlData> entry : urlMappings.entrySet()) {
             UrlData urlData = entry.getValue();
