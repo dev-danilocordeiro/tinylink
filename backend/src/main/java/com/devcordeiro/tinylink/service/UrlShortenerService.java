@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,7 +30,6 @@ public class UrlShortenerService {
     private final RedisTemplate<String, Object> redisTemplate;
 
     private final Map<String, UrlData> urlMappings = new ConcurrentHashMap<>();
-    private final Map<String, List<ClickEvent>> clickAnalytics = new ConcurrentHashMap<>();
 
     @Value("${tinylink.base-url}")
     private String baseUrl;
@@ -62,8 +60,6 @@ public class UrlShortenerService {
         }
 
         String shortCode = urlData.getShortCode();
-        clickAnalytics.put(shortCode, new ArrayList<>());
-
         cacheUrl(shortCode, request.getOriginalUrl(), request.getExpiresAt());
 
         log.info("Created short URL: {} -> {}", shortCode, request.getOriginalUrl());
@@ -84,9 +80,7 @@ public class UrlShortenerService {
                 .expiresAt(request.getExpiresAt())
                 .createdAt(LocalDateTime.now())
                 .createdBy(clientIp)
-                .clickCount(0)
                 .isActive(true)
-                .clickEvents(new ArrayList<>())
                 .build();
     }
 
@@ -171,16 +165,12 @@ public class UrlShortenerService {
     public void recordClick(String shortCode, String clientIp, String userAgent, String referer) {
         UrlData urlData = urlMappings.get(shortCode);
         if (urlData != null && urlData.isActive()) {
-            urlData.setClickCount(urlData.getClickCount() + 1);
-
-            ClickEvent clickEvent = ClickEvent.builder()
+            urlData.recordClick(ClickEvent.builder()
                     .timestamp(LocalDateTime.now())
                     .ipAddress(clientIp)
                     .userAgent(userAgent)
                     .referer(referer)
-                    .build();
-
-            clickAnalytics.get(shortCode).add(clickEvent);
+                    .build());
             log.debug("Clicked URL: {} -> {}", shortCode, urlData.getOriginalUrl());
         }
     }
@@ -211,7 +201,8 @@ public class UrlShortenerService {
             return Optional.empty();
         }
 
-        List<ClickEvent> clickEvents = clickAnalytics.getOrDefault(shortCode, new ArrayList<>());
+        // Snapshot once so every aggregate below is computed from the same set of clicks.
+        List<ClickEvent> clickEvents = List.copyOf(urlData.getClickEvents());
 
         Map<String, Integer> clicksByReferer = clickEvents.stream()
                 .filter(c -> c.getReferer() != null)
@@ -243,7 +234,7 @@ public class UrlShortenerService {
                         .createdAt(urlData.getCreatedAt())
                         .expiresAt(urlData.getExpiresAt())
                         .originalUrl(urlData.getOriginalUrl())
-                        .totalClicks(urlData.getClickCount())
+                        .totalClicks(clickEvents.size())
                         .recentClicks(recentClicks)
                         .clicksByDay(clicksByDay)
                         .clicksByHour(clicksByHour)

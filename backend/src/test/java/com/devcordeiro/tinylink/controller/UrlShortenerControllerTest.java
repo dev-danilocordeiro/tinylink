@@ -39,7 +39,7 @@ class UrlShortenerControllerTest {
 
     @BeforeEach
     void allowRequests() {
-        when(rateLimitService.isAllowed(anyString())).thenReturn(true);
+        when(rateLimitService.tryAcquire(anyString())).thenReturn(new RateLimitService.Decision(true, 1, 0));
     }
 
     @Test
@@ -126,9 +126,7 @@ class UrlShortenerControllerTest {
 
     @Test
     void exceededRateLimitReturnsTooManyRequestsProblemWithRetryAfter() {
-        when(rateLimitService.isAllowed(anyString())).thenReturn(false);
-        when(rateLimitService.getRemainingRequests(anyString())).thenReturn(0);
-        when(rateLimitService.getTimeUntilReset(anyString())).thenReturn(42L);
+        when(rateLimitService.tryAcquire(anyString())).thenReturn(new RateLimitService.Decision(false, 0, 42));
 
         assertThat(mvc.post().uri("/api/shorten")
                 .contentType(MediaType.APPLICATION_JSON)

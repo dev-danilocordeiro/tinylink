@@ -13,6 +13,9 @@ spring:
           min-idle: 0
 server:
   port: 8080
+  # Tomcat takes the client IP from X-Forwarded-For only when the request comes from a
+  # trusted proxy (loopback and private ranges by default), so clients can't spoof it.
+  forward-headers-strategy: native
 
 tinylink:
   base-url: http://localhost:8080
