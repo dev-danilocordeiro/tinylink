@@ -14,5 +14,17 @@ services:
       retries: 5
     restart: unless-stopped
 
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: tinylink-redis-commander
+    environment:
+      REDIS_HOSTS: tinylink:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   redis-data:
