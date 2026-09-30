@@ -27,8 +27,8 @@ docker compose up -d --build
 | Redis Commander | http://localhost:8081  |
 
 The frontend's nginx proxies `/api` to the backend. Set `BACKEND_PORT` or `FRONTEND_PORT` to
-publish on other ports, and `TZ` if you're not in `America/Sao_Paulo`: `expiresAt` is a local
-date-time read in the backend's time zone.
+publish on other ports, and `TZ` if you're not in `America/Sao_Paulo`: analytics group clicks
+by hour and day in the backend's time zone.
 
 ### Backend from source
 
@@ -75,22 +75,22 @@ All routes are under `/api`.
 ```bash
 curl -X POST http://localhost:8080/api/shorten \
   -H 'Content-Type: application/json' \
-  -d '{"originalUrl": "https://github.com", "customAlias": "gh", "expiresAt": "2026-12-31T23:59:59"}'
+  -d '{"originalUrl": "https://github.com", "customAlias": "gh", "expiresAt": "2026-12-31T23:59:59-03:00"}'
 ```
 
 | Field         | Required | Rules                                                                 |
 |---------------|----------|-----------------------------------------------------------------------|
 | `originalUrl` | yes      | Must start with `http://` or `https://`                               |
 | `customAlias` | no       | 3–30 letters, digits, `-` or `_`. Empty or missing generates a 6-character base62 code |
-| `expiresAt`   | no       | ISO local date-time. After it passes, the link returns 404            |
+| `expiresAt`   | no       | ISO-8601 date-time **with an offset** (`Z` or `-03:00`). After it passes, the link returns 404 |
 
 ```json
 {
   "shortUrl": "http://localhost:8080/api/gh",
   "shortCode": "gh",
   "originalUrl": "https://github.com",
-  "createdAt": "2026-09-30T19:51:48.878",
-  "expiresAt": "2026-12-31T23:59:59"
+  "createdAt": "2026-09-30T22:51:48.878Z",
+  "expiresAt": "2027-01-01T02:59:59Z"
 }
 ```
 
@@ -130,6 +130,8 @@ Errors follow [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) and are returne
   private ranges), so clients can't spoof their IP to bypass the rate limit.
 - **Expiry cleanup:** `CleanupScheduler` runs every `tinylink.cleanup.interval-minutes` and
   deactivates links past their `expiresAt`.
+- **Timestamps:** stored and returned as UTC instants (`...Z`). Only the analytics hour and day
+  buckets use the server's time zone.
 - **Delete:** a soft delete. The link stops redirecting, but its stats stay available with
   `"active": false`.
 

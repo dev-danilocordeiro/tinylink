@@ -32,7 +32,7 @@ services:
     environment:
       SPRING_DATA_REDIS_HOST: redis
       TINYLINK_BASE_URL: http://localhost:${BACKEND_PORT:-8080}
-      # LocalDateTime values (expiresAt) are read in the JVM's zone; match the host's.
+      # Zone used to bucket analytics clicks by hour and day; match the host's.
       TZ: ${TZ:-America/Sao_Paulo}
     ports:
       - "${BACKEND_PORT:-8080}:8080"

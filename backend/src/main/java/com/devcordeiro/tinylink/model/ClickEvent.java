@@ -5,14 +5,14 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class ClickEvent {
-    private LocalDateTime timestamp;
+    private Instant timestamp;
     private String ipAddress;
     private String userAgent;
     private String referer;

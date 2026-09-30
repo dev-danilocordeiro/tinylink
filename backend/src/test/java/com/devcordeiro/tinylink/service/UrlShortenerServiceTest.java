@@ -11,7 +11,6 @@ import org.springframework.data.redis.core.ValueOperations;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -34,8 +33,8 @@ class UrlShortenerServiceTest {
     private static final class MutableClock extends Clock {
         private volatile Instant now;
 
-        MutableClock(LocalDateTime start) {
-            this.now = start.toInstant(ZoneOffset.UTC);
+        MutableClock(Instant start) {
+            this.now = start;
         }
 
         void advance(Duration duration) {
@@ -58,7 +57,7 @@ class UrlShortenerServiceTest {
         }
     }
 
-    private static final LocalDateTime START = LocalDateTime.of(2026, 1, 15, 9, 30);
+    private static final Instant START = Instant.parse("2026-01-15T09:30:00Z");
 
     private final MutableClock clock = new MutableClock(START);
     private UrlShortenerService service;

@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @Builder
@@ -21,5 +21,5 @@ public class ShortenUrlRequest {
     @Pattern(regexp = "^$|^[a-zA-Z0-9_-]{3,30}$",
             message = "Custom alias must be 3 to 30 characters: letters, digits, '-' or '_'")
     private String customAlias;
-    private LocalDateTime expiresAt;
+    private Instant expiresAt;
 }
