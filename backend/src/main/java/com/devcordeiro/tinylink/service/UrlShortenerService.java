@@ -250,4 +250,23 @@ public class UrlShortenerService {
                         .build()
         );
     }
+
+    public boolean deleteUrl(String shortCode) {
+        UrlData urlData = urlMappings.get(shortCode);
+        if (urlData != null) {
+            urlData.setActive(false);
+            deleteCacheUrl(shortCode);
+            log.info("Deleted URL: {} -> {}", shortCode, urlData.getOriginalUrl());
+            return true;
+        }
+        return false;
+    }
+
+    private void deleteCacheUrl(String shortCode) {
+        try {
+            redisTemplate.delete("url:" + shortCode);
+        } catch (Exception e) {
+            log.warn("Failed to delete URL: {} -> {}", shortCode, e.getMessage());
+        }
+    }
 }
