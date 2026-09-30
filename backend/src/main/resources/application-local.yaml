@@ -1,0 +1,9 @@
+# Development overrides. ./mvnw spring-boot:run activates this profile.
+tinylink:
+  cleanup:
+    interval-minutes: 1
+
+logging:
+  level:
+    com.devcordeiro.tinylink: DEBUG
+    org.springframework.data.redis: DEBUG

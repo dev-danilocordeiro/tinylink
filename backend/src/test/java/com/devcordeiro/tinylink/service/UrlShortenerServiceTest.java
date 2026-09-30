@@ -7,8 +7,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -19,11 +24,43 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class UrlShortenerServiceTest {
 
+    /** A clock the test can move forward, to cross expiry dates without waiting. */
+    private static final class MutableClock extends Clock {
+        private volatile Instant now;
+
+        MutableClock(LocalDateTime start) {
+            this.now = start.toInstant(ZoneOffset.UTC);
+        }
+
+        void advance(Duration duration) {
+            now = now.plus(duration);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
+        }
+    }
+
+    private static final LocalDateTime START = LocalDateTime.of(2026, 1, 15, 9, 30);
+
+    private final MutableClock clock = new MutableClock(START);
     private UrlShortenerService service;
 
     @BeforeEach
@@ -32,15 +69,62 @@ class UrlShortenerServiceTest {
         RedisTemplate<String, Object> redisTemplate = mock(RedisTemplate.class);
         when(redisTemplate.opsForValue()).thenReturn(mock(ValueOperations.class));
 
-        service = new UrlShortenerService(redisTemplate);
-        ReflectionTestUtils.setField(service, "baseUrl", "http://localhost:8080");
-        ReflectionTestUtils.setField(service, "shortCodeLength", 6);
-        ReflectionTestUtils.setField(service, "maxGenerationAttempts", 10);
-        ReflectionTestUtils.setField(service, "cacheTtlMinutes", 30);
+        service = new UrlShortenerService(redisTemplate, clock, "http://localhost:8080", 6, 10, 30);
     }
 
     private static ShortenUrlRequest request(String alias) {
         return ShortenUrlRequest.builder().originalUrl("https://example.com").customAlias(alias).build();
+    }
+
+    private String shortenExpiringIn(Duration duration) {
+        ShortenUrlRequest request = ShortenUrlRequest.builder()
+                .originalUrl("https://example.com")
+                .expiresAt(duration == null ? null : START.plus(duration))
+                .build();
+        return service.shortenUrl(request, "1.1.1.1").getShortCode();
+    }
+
+    private boolean isActive(String code) {
+        return service.getUrlStats(code).orElseThrow().isActive();
+    }
+
+    @Test
+    void linkStopsRedirectingOnceItsExpiryHasPassed() {
+        String code = shortenExpiringIn(Duration.ofHours(1));
+        assertThat(service.getOriginalUrl(code)).contains("https://example.com");
+
+        clock.advance(Duration.ofHours(2));
+
+        assertThat(service.getOriginalUrl(code)).isEmpty();
+        assertThat(isActive(code)).isFalse();
+    }
+
+    @Test
+    void cleanupDeactivatesOnlyLinksPastTheirExpiry() {
+        String expired = shortenExpiringIn(Duration.ofHours(1));
+        String stillValid = shortenExpiringIn(Duration.ofHours(3));
+        String neverExpires = shortenExpiringIn(null);
+
+        clock.advance(Duration.ofHours(2));
+        service.cleanupExpiredUrls();
+
+        assertThat(isActive(expired)).isFalse();
+        assertThat(isActive(stillValid)).isTrue();
+        assertThat(isActive(neverExpires)).isTrue();
+    }
+
+    @Test
+    void clicksByHourUsesZeroPaddedHoursInChronologicalOrder() {
+        String code = shortenExpiringIn(null);
+        service.recordClick(code, "10.0.0.1", "agent", null);
+        clock.advance(Duration.ofHours(1));
+        service.recordClick(code, "10.0.0.1", "agent", null);
+        service.recordClick(code, "10.0.0.1", "agent", null);
+
+        assertThat(service.getUrlAnalytics(code)).get().satisfies(analytics ->
+                assertThat(analytics.getClicksByHour()).containsExactly(
+                        entry("09:00", 1),
+                        entry("10:00", 2)));
     }
 
     @Test

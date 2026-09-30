@@ -28,13 +28,8 @@ tinylink:
   cache:
     ttl-minutes: 30
   cleanup:
-    interval-minutes: 1
-    expired-urls-batch-size: 100
-
+    interval-minutes: 5
 
 logging:
-  level:
-    com.devcordeiro.tinylink: DEBUG
-    org.springframework.data.redis: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

@@ -17,6 +17,6 @@ public class UrlStatsResponse {
     private int clickCount;
     private LocalDateTime createdAt;
     private LocalDateTime expiresAt;
-    private boolean isActive;
+    private boolean active;
     private String createdBy;
 }
