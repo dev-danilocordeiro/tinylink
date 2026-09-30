@@ -4,6 +4,7 @@ import com.devcordeiro.tinylink.dto.ShortenUrlRequest;
 import com.devcordeiro.tinylink.dto.ShortenUrlResponse;
 import com.devcordeiro.tinylink.dto.UrlAnalyticsResponse;
 import com.devcordeiro.tinylink.dto.UrlStatsResponse;
+import com.devcordeiro.tinylink.exception.AliasAlreadyExistsException;
 import com.devcordeiro.tinylink.model.ClickEvent;
 import com.devcordeiro.tinylink.model.UrlData;
 import lombok.RequiredArgsConstructor;
@@ -47,29 +48,20 @@ public class UrlShortenerService {
     private static final String BASE_62_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
     public ShortenUrlResponse shortenUrl(ShortenUrlRequest request, String clientIp) {
-        String shortCode = request.getCustomAlias();
+        String customAlias = request.getCustomAlias();
+        UrlData urlData;
 
-        if (shortCode == null ||  shortCode.trim().isEmpty()) {
-            shortCode = generateUniqueShortCode();
+        if (customAlias == null || customAlias.isBlank()) {
+            urlData = storeWithGeneratedShortCode(request, clientIp);
         } else {
-            shortCode = shortCode.trim();
-            if(shortCodeExists(shortCode)) {
-                throw new IllegalArgumentException("Custom alias already exists: "  + shortCode);
+            urlData = newUrlData(customAlias.trim(), request, clientIp);
+            // putIfAbsent makes check-and-insert atomic, so two requests racing for one alias can't both win.
+            if (urlMappings.putIfAbsent(urlData.getShortCode(), urlData) != null) {
+                throw new AliasAlreadyExistsException(urlData.getShortCode());
             }
         }
 
-        UrlData urlData = UrlData.builder()
-                .originalUrl(request.getOriginalUrl())
-                .shortCode(shortCode)
-                .expiresAt(request.getExpiresAt())
-                .createdAt(LocalDateTime.now())
-                .createdBy(clientIp)
-                .clickCount(0)
-                .isActive(true)
-                .clickEvents(new ArrayList<>())
-                .build();
-
-        urlMappings.put(shortCode, urlData);
+        String shortCode = urlData.getShortCode();
         clickAnalytics.put(shortCode, new ArrayList<>());
 
         cacheUrl(shortCode, request.getOriginalUrl(), request.getExpiresAt());
@@ -82,6 +74,19 @@ public class UrlShortenerService {
                 .originalUrl(request.getOriginalUrl())
                 .createdAt(urlData.getCreatedAt())
                 .expiresAt(urlData.getExpiresAt())
+                .build();
+    }
+
+    private UrlData newUrlData(String shortCode, ShortenUrlRequest request, String clientIp) {
+        return UrlData.builder()
+                .originalUrl(request.getOriginalUrl())
+                .shortCode(shortCode)
+                .expiresAt(request.getExpiresAt())
+                .createdAt(LocalDateTime.now())
+                .createdBy(clientIp)
+                .clickCount(0)
+                .isActive(true)
+                .clickEvents(new ArrayList<>())
                 .build();
     }
 
@@ -110,19 +115,15 @@ public class UrlShortenerService {
         }
     }
 
-    private String generateUniqueShortCode() {
+    private UrlData storeWithGeneratedShortCode(ShortenUrlRequest request, String clientIp) {
         for (int attempt = 0; attempt < maxGenerationAttempts; attempt++) {
-            String code = generateRandomBase62();
-            if(!shortCodeExists(code)) {
-                return code;
+            UrlData urlData = newUrlData(generateRandomBase62(), request, clientIp);
+            if (urlMappings.putIfAbsent(urlData.getShortCode(), urlData) == null) {
+                return urlData;
             }
         }
 
-        throw new RuntimeException("Failed to generate unique short code after " + maxGenerationAttempts + " attempts");
-    }
-
-    private boolean shortCodeExists(String code) {
-        return urlMappings.containsKey(code);
+        throw new IllegalStateException("Failed to generate unique short code after " + maxGenerationAttempts + " attempts");
     }
 
     private String generateRandomBase62() {
@@ -253,7 +254,7 @@ public class UrlShortenerService {
 
     public boolean deleteUrl(String shortCode) {
         UrlData urlData = urlMappings.get(shortCode);
-        if (urlData != null) {
+        if (urlData != null && urlData.isActive()) {
             urlData.setActive(false);
             deleteCacheUrl(shortCode);
             log.info("Deleted URL: {} -> {}", shortCode, urlData.getOriginalUrl());

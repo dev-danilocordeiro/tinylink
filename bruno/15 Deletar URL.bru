@@ -11,12 +11,8 @@ delete {
 }
 
 tests {
-  test("retorna 200", function () {
-    expect(res.getStatus()).to.equal(200);
-  });
-
-  test("confirma a remoção", function () {
-    expect(res.body.message).to.equal("URL deleted successfully");
+  test("retorna 204 sem corpo", function () {
+    expect(res.getStatus()).to.equal(204);
   });
 }
 

@@ -18,12 +18,14 @@ body:json {
 }
 
 tests {
-  test("retorna 400", function () {
-    expect(res.getStatus()).to.equal(400);
+  test("retorna 409", function () {
+    expect(res.getStatus()).to.equal(409);
   });
 
-  test("explica que o alias já existe", function () {
-    expect(res.body.error).to.contain("Custom alias already exists");
+  test("responde com ProblemDetail explicando que o alias já existe", function () {
+    expect(res.getHeader("content-type")).to.contain("application/problem+json");
+    expect(res.body.title).to.equal("Alias already exists");
+    expect(res.body.alias).to.equal(bru.getVar("aliasCode"));
   });
 }
 

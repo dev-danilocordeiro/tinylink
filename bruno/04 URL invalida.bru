@@ -20,4 +20,9 @@ tests {
   test("retorna 400 por falta de http/https", function () {
     expect(res.getStatus()).to.equal(400);
   });
+
+  test("aponta o campo inválido no ProblemDetail", function () {
+    expect(res.body.title).to.equal("Invalid request");
+    expect(res.body.errors[0].field).to.equal("originalUrl");
+  });
 }
