@@ -269,4 +269,22 @@ public class UrlShortenerService {
             log.warn("Failed to delete URL: {} -> {}", shortCode, e.getMessage());
         }
     }
+
+    public void cleanupExpiredUrls() {
+        int cleanedCount = 0;
+        LocalDateTime now = LocalDateTime.now();
+
+        for (Map.Entry<String, UrlData> entry : urlMappings.entrySet()) {
+            UrlData urlData = entry.getValue();
+            if (urlData.getExpiresAt() != null && urlData.getExpiresAt().isBefore(now) && urlData.isActive()) {
+                urlData.setActive(false);
+                deleteCacheUrl(entry.getKey());
+                cleanedCount++;
+            }
+        }
+
+        if (cleanedCount > 0) {
+            log.info("Cleaned expired URLs: {} -> {}", cleanedCount, urlMappings.size());
+        }
+    }
 }
