@@ -1,0 +1,50 @@
+meta {
+  name: Analytics
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/analytics/{{shortCode}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("retorna 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("traz os dados do link", function () {
+    expect(res.body.shortCode).to.equal(bru.getVar("shortCode"));
+    expect(res.body.originalUrl).to.equal("https://github.com/dev-danilocordeiro/tinylink");
+    expect(res.body.createdAt).to.be.a("string");
+  });
+
+  test("conta o clique do redirect", function () {
+    expect(res.body.totalClicks).to.be.at.least(1);
+  });
+
+  test("lista no máximo 10 cliques recentes, do mais novo para o mais antigo", function () {
+    const clicks = res.body.recentClicks;
+    expect(clicks).to.be.an("array").that.is.not.empty;
+    expect(clicks.length).to.be.at.most(10);
+    for (let i = 1; i < clicks.length; i++) {
+      expect(clicks[i - 1].timestamp >= clicks[i].timestamp).to.equal(true);
+    }
+  });
+
+  test("agrupamentos por dia e por hora somam o total de cliques", function () {
+    const sum = (m) => Object.values(m).reduce((a, b) => a + b, 0);
+    expect(sum(res.body.clicksByDay)).to.equal(res.body.totalClicks);
+    expect(sum(res.body.clicksByHour)).to.equal(res.body.totalClicks);
+  });
+
+  test("agrupa os cliques pelo Referer enviado no Redirecionar", function () {
+    expect(res.body.clicksByReferer["https://www.linkedin.com/"]).to.be.at.least(1);
+  });
+}
+
+docs {
+  Depende de **Encurtar URL** e **Redirecionar** terem rodado antes (usa `{{shortCode}}`).
+}

@@ -2,6 +2,7 @@ package com.devcordeiro.tinylink.controller;
 
 import com.devcordeiro.tinylink.dto.ShortenUrlRequest;
 import com.devcordeiro.tinylink.dto.ShortenUrlResponse;
+import com.devcordeiro.tinylink.dto.UrlAnalyticsResponse;
 import com.devcordeiro.tinylink.dto.UrlStatsResponse;
 import com.devcordeiro.tinylink.service.RateLimitService;
 import com.devcordeiro.tinylink.service.UrlShortenerService;
@@ -74,10 +75,21 @@ public class UrlShortenerController {
     }
 
     @GetMapping("/stats/{shortCode}")
-    public ResponseEntity<?> stats(@PathVariable String shortCode) {
+    public ResponseEntity<?> getStats(@PathVariable String shortCode) {
         Optional<UrlStatsResponse> stats = urlShortenerService.getUrlStats(shortCode);
         if(stats.isPresent()) {
             return ResponseEntity.ok(stats.get());
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "short code not found"));
+        }
+    }
+
+    @GetMapping("/analytics/{shortCode}")
+    public ResponseEntity<?> getUrlAnalytics(@PathVariable String shortCode) {
+        Optional<UrlAnalyticsResponse> analytics = urlShortenerService.getUrlAnalytics(shortCode);
+        if(analytics.isPresent()) {
+            return ResponseEntity.ok(analytics.get());
         } else {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("error", "short code not found"));

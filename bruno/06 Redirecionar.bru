@@ -10,6 +10,10 @@ get {
   auth: none
 }
 
+headers {
+  Referer: https://www.linkedin.com/
+}
+
 script:pre-request {
   // Sem isso o Bruno segue o redirect e mostra a página de destino em vez do 302.
   req.setMaxRedirects(0);
