@@ -2,6 +2,7 @@ package com.devcordeiro.tinylink.service;
 
 import com.devcordeiro.tinylink.dto.ShortenUrlRequest;
 import com.devcordeiro.tinylink.dto.ShortenUrlResponse;
+import com.devcordeiro.tinylink.dto.UrlStatsResponse;
 import com.devcordeiro.tinylink.model.ClickEvent;
 import com.devcordeiro.tinylink.model.UrlData;
 import lombok.RequiredArgsConstructor;
@@ -179,5 +180,24 @@ public class UrlShortenerService {
             clickAnalytics.get(shortCode).add(clickEvent);
             log.debug("Clicked URL: {} -> {}", shortCode, urlData.getOriginalUrl());
         }
+    }
+
+    public Optional<UrlStatsResponse> getUrlStats(String shortCode) {
+        UrlData urlData = urlMappings.get(shortCode);
+        if (urlData == null) {
+            return Optional.empty();
+        }
+
+        return Optional.of(
+                UrlStatsResponse.builder()
+                        .shortCode(shortCode)
+                        .createdAt(urlData.getCreatedAt())
+                        .expiresAt(urlData.getExpiresAt())
+                        .originalUrl(urlData.getOriginalUrl())
+                        .clickCount(urlData.getClickCount())
+                        .isActive(urlData.isActive())
+                        .createdBy(urlData.getCreatedBy())
+                        .build()
+        );
     }
 }

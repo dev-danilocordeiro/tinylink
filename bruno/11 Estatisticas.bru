@@ -1,0 +1,37 @@
+meta {
+  name: Estatísticas
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/stats/{{shortCode}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("retorna 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("traz os dados do link", function () {
+    expect(res.body.shortCode).to.equal(bru.getVar("shortCode"));
+    expect(res.body.originalUrl).to.equal("https://github.com/dev-danilocordeiro/tinylink");
+    expect(res.body.createdAt).to.be.a("string");
+    expect(res.body.createdBy).to.be.a("string");
+  });
+
+  test("conta o clique do redirect", function () {
+    expect(res.body.clickCount).to.be.at.least(1);
+  });
+
+  test("link está ativo", function () {
+    // Lombok gera isActive() para o campo boolean isActive, e o Jackson serializa como "active".
+    expect(res.body.active).to.equal(true);
+  });
+}
+
+docs {
+  Depende de **Encurtar URL** e **Redirecionar** terem rodado antes (usa `{{shortCode}}`).
+}

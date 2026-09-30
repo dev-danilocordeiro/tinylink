@@ -19,7 +19,7 @@ tests {
   test("retorna 302", function () {
     expect(res.getStatus()).to.equal(302);
   });
-
+  
   test("Location aponta para a URL original", function () {
     expect(res.getHeader("location")).to.equal("https://github.com/dev-danilocordeiro/tinylink");
   });
