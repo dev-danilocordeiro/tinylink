@@ -1,0 +1,23 @@
+meta {
+  name: URL inválida
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/shorten
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "originalUrl": "github.com/sem-protocolo"
+  }
+}
+
+tests {
+  test("retorna 400 por falta de http/https", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+}

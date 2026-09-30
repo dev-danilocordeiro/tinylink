@@ -1,0 +1,30 @@
+meta {
+  name: Redirecionar
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/{{shortCode}}
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  // Sem isso o Bruno segue o redirect e mostra a página de destino em vez do 302.
+  req.setMaxRedirects(0);
+}
+
+tests {
+  test("retorna 302", function () {
+    expect(res.getStatus()).to.equal(302);
+  });
+
+  test("Location aponta para a URL original", function () {
+    expect(res.getHeader("location")).to.equal("https://github.com/dev-danilocordeiro/tinylink");
+  });
+}
+
+docs {
+  Depende de **Encurtar URL** ter rodado antes (usa `{{shortCode}}`).
+}

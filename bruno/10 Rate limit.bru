@@ -1,0 +1,41 @@
+meta {
+  name: Rate limit
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/shorten
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "originalUrl": "https://example.com/rate-limit"
+  }
+}
+
+script:pre-request {
+  // IP fixo (sobrescreve o aleatório da collection) para acumular requisições no mesmo cliente.
+  req.setHeader("X-Forwarded-For", "203.0.113.7");
+}
+
+tests {
+  test("responde 200 até o limite e 429 depois", function () {
+    expect(res.getStatus()).to.be.oneOf([200, 429]);
+  });
+
+  if (res.getStatus() === 429) {
+    test("corpo do 429 traz o erro, 0 restantes e o tempo até liberar", function () {
+      expect(res.body.error).to.equal("Rate limit exceeded");
+      expect(res.body.remainingRequests).to.equal(0);
+      expect(res.body.timeUntilReset).to.be.above(0);
+    });
+  }
+}
+
+docs {
+  Envie esta requisição 3 vezes seguidas: as 2 primeiras devem dar 200 e a 3ª, 429
+  (limite de 2 por minuto por IP). Depois de um minuto o contador zera.
+}

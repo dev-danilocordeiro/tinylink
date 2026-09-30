@@ -1,0 +1,21 @@
+meta {
+  name: Redirecionar código inexistente
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/naoexiste123
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  req.setMaxRedirects(0);
+}
+
+tests {
+  test("retorna 404", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+}

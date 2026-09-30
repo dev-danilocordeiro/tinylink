@@ -5,6 +5,7 @@ import com.devcordeiro.tinylink.dto.ShortenUrlResponse;
 import com.devcordeiro.tinylink.service.RateLimitService;
 import com.devcordeiro.tinylink.service.UrlShortenerService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api")
@@ -47,6 +49,27 @@ public class UrlShortenerController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    @GetMapping("/{shortCode}")
+    public ResponseEntity<Void> redirectToUrl(@PathVariable String shortCode,
+                                              HttpServletRequest httpRequest,
+                                              HttpServletResponse httpResponse) {
+
+        String clientIp = getClientIp(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
+        String referer = httpRequest.getHeader("Referer");
+
+        Optional<String> originalUrl = urlShortenerService.getOriginalUrl(shortCode);
+
+        if(originalUrl.isPresent()) {
+            urlShortenerService.recordClick(shortCode,clientIp, userAgent,referer);
+            httpResponse.setHeader("Location", originalUrl.get());
+            return ResponseEntity.status(HttpStatus.FOUND).build();
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+
     }
 
     private String getClientIp(HttpServletRequest httpRequest) {
