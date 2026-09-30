@@ -1,0 +1,25 @@
+meta {
+  name: Redirecionar link deletado
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/api/{{shortCode}}
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  req.setMaxRedirects(0);
+}
+
+tests {
+  test("retorna 404", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+}
+
+docs {
+  Depende de **Deletar URL** ter rodado antes (usa `{{shortCode}}`).
+}

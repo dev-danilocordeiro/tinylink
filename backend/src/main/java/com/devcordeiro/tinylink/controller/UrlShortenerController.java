@@ -2,6 +2,8 @@ package com.devcordeiro.tinylink.controller;
 
 import com.devcordeiro.tinylink.dto.ShortenUrlRequest;
 import com.devcordeiro.tinylink.dto.ShortenUrlResponse;
+import com.devcordeiro.tinylink.dto.UrlAnalyticsResponse;
+import com.devcordeiro.tinylink.dto.UrlStatsResponse;
 import com.devcordeiro.tinylink.service.RateLimitService;
 import com.devcordeiro.tinylink.service.UrlShortenerService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -71,6 +73,40 @@ public class UrlShortenerController {
         }
 
     }
+
+    @GetMapping("/stats/{shortCode}")
+    public ResponseEntity<?> getStats(@PathVariable String shortCode) {
+        Optional<UrlStatsResponse> stats = urlShortenerService.getUrlStats(shortCode);
+        if(stats.isPresent()) {
+            return ResponseEntity.ok(stats.get());
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "short code not found"));
+        }
+    }
+
+    @GetMapping("/analytics/{shortCode}")
+    public ResponseEntity<?> getUrlAnalytics(@PathVariable String shortCode) {
+        Optional<UrlAnalyticsResponse> analytics = urlShortenerService.getUrlAnalytics(shortCode);
+        if(analytics.isPresent()) {
+            return ResponseEntity.ok(analytics.get());
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "short code not found"));
+        }
+    }
+
+    @DeleteMapping("/{shortCode}")
+    public ResponseEntity<?> deleteUrl(@PathVariable String shortCode) {
+        boolean deleted = urlShortenerService.deleteUrl(shortCode);
+        if(deleted) {
+            return ResponseEntity.ok(Map.of("message", "URL deleted successfully"));
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "short code not found"));
+        }
+    }
+
 
     private String getClientIp(HttpServletRequest httpRequest) {
         String xForwardedFor = httpRequest.getHeader("X-Forwarded-For");

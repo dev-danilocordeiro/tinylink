@@ -2,6 +2,8 @@ package com.devcordeiro.tinylink.service;
 
 import com.devcordeiro.tinylink.dto.ShortenUrlRequest;
 import com.devcordeiro.tinylink.dto.ShortenUrlResponse;
+import com.devcordeiro.tinylink.dto.UrlAnalyticsResponse;
+import com.devcordeiro.tinylink.dto.UrlStatsResponse;
 import com.devcordeiro.tinylink.model.ClickEvent;
 import com.devcordeiro.tinylink.model.UrlData;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -178,6 +181,92 @@ public class UrlShortenerService {
 
             clickAnalytics.get(shortCode).add(clickEvent);
             log.debug("Clicked URL: {} -> {}", shortCode, urlData.getOriginalUrl());
+        }
+    }
+
+    public Optional<UrlStatsResponse> getUrlStats(String shortCode) {
+        UrlData urlData = urlMappings.get(shortCode);
+        if (urlData == null) {
+            return Optional.empty();
+        }
+
+        return Optional.of(
+                UrlStatsResponse.builder()
+                        .shortCode(shortCode)
+                        .createdAt(urlData.getCreatedAt())
+                        .expiresAt(urlData.getExpiresAt())
+                        .originalUrl(urlData.getOriginalUrl())
+                        .clickCount(urlData.getClickCount())
+                        .isActive(urlData.isActive())
+                        .createdBy(urlData.getCreatedBy())
+                        .build()
+        );
+    }
+
+    public Optional<UrlAnalyticsResponse> getUrlAnalytics(String shortCode) {
+
+        UrlData urlData = urlMappings.get(shortCode);
+        if (urlData == null) {
+            return Optional.empty();
+        }
+
+        List<ClickEvent> clickEvents = clickAnalytics.getOrDefault(shortCode, new ArrayList<>());
+
+        Map<String, Integer> clicksByReferer = clickEvents.stream()
+                .filter(c -> c.getReferer() != null)
+                .collect(Collectors.groupingBy(
+                        ClickEvent::getReferer, Collectors.summingInt( e -> 1)
+                ));
+
+        Map<String, Integer> clicksByHour = clickEvents.stream()
+                .collect(Collectors.groupingBy(
+                        c -> c.getTimestamp().getHour() + ":00",
+                        Collectors.summingInt( e -> 1)
+                ));
+
+        Map<String, Integer> clicksByDay = clickEvents.stream()
+                .collect(Collectors.groupingBy(
+                        c -> c.getTimestamp().toLocalDate().toString(),
+                        Collectors.summingInt( e -> 1)
+                ));
+
+        List<ClickEvent> recentClicks = clickEvents.stream()
+                .sorted(( a, b) -> b.getTimestamp().compareTo(a.getTimestamp()))
+                .limit(10)
+                .toList();
+
+
+        return Optional.of(
+                UrlAnalyticsResponse.builder()
+                        .shortCode(shortCode)
+                        .createdAt(urlData.getCreatedAt())
+                        .expiresAt(urlData.getExpiresAt())
+                        .originalUrl(urlData.getOriginalUrl())
+                        .totalClicks(urlData.getClickCount())
+                        .recentClicks(recentClicks)
+                        .clicksByDay(clicksByDay)
+                        .clicksByHour(clicksByHour)
+                        .clicksByReferer(clicksByReferer)
+                        .build()
+        );
+    }
+
+    public boolean deleteUrl(String shortCode) {
+        UrlData urlData = urlMappings.get(shortCode);
+        if (urlData != null) {
+            urlData.setActive(false);
+            deleteCacheUrl(shortCode);
+            log.info("Deleted URL: {} -> {}", shortCode, urlData.getOriginalUrl());
+            return true;
+        }
+        return false;
+    }
+
+    private void deleteCacheUrl(String shortCode) {
+        try {
+            redisTemplate.delete("url:" + shortCode);
+        } catch (Exception e) {
+            log.warn("Failed to delete URL: {} -> {}", shortCode, e.getMessage());
         }
     }
 }

@@ -1,0 +1,25 @@
+meta {
+  name: Deletar URL
+  type: http
+  seq: 15
+}
+
+delete {
+  url: {{baseUrl}}/api/{{shortCode}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("retorna 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("confirma a remoção", function () {
+    expect(res.body.message).to.equal("URL deleted successfully");
+  });
+}
+
+docs {
+  Depende de **Encurtar URL** ter rodado antes (usa `{{shortCode}}`). Desativa o link, então rode depois de Estatísticas e Analytics.
+}

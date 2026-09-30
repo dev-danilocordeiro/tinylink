@@ -1,0 +1,21 @@
+meta {
+  name: Estatísticas código inexistente
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/stats/naoexiste123
+  body: none
+  auth: none
+}
+
+tests {
+  test("retorna 404", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+
+  test("explica que o código não existe", function () {
+    expect(res.body.error).to.equal("short code not found");
+  });
+}
