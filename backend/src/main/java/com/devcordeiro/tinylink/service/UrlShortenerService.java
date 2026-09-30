@@ -4,8 +4,6 @@ import com.devcordeiro.tinylink.dto.ShortenUrlRequest;
 import com.devcordeiro.tinylink.dto.ShortenUrlResponse;
 import com.devcordeiro.tinylink.model.ClickEvent;
 import com.devcordeiro.tinylink.model.UrlData;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -90,7 +89,7 @@ public class UrlShortenerService {
 
     private void cacheUrl(String shortCode, String originalUrl) {
         try {
-            redisTemplate.opsForValue().set("url: " + shortCode, originalUrl, cacheTtlMinutes, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set("url:" + shortCode, originalUrl, cacheTtlMinutes, TimeUnit.MINUTES);
         }  catch (Exception e) {
             log.warn("Failed to cache url for: {}:{}", shortCode, e.getMessage());
         }
@@ -120,5 +119,53 @@ public class UrlShortenerService {
         }
 
         return sb.toString();
+    }
+
+    public Optional<String> getOriginalUrl(String shortCode) {
+        String cachedUrl = getCachedUrl(shortCode);
+        if (cachedUrl != null) {
+            return Optional.of(cachedUrl);
+        }
+
+        UrlData urlData = urlMappings.get(shortCode);
+        if (urlData != null && urlData.isActive()) {
+            if(isExpired(urlData)) {
+                urlData.setActive(false);
+                return Optional.empty();
+            }
+            cacheUrl(shortCode, urlData.getOriginalUrl());
+            return Optional.of(urlData.getOriginalUrl());
+        }
+        return Optional.empty();
+    }
+
+    private boolean isExpired(UrlData urlData) {
+        return urlData.getExpiresAt() != null && urlData.getExpiresAt().isBefore(LocalDateTime.now());
+    }
+
+    private String getCachedUrl(String shortCode) {
+        try {
+            return (String) redisTemplate.opsForValue().get("url:" + shortCode);
+        } catch (Exception e) {
+            log.warn("Failed to get cached url for: {}:{}", shortCode, e.getMessage());
+            return null;
+        }
+    }
+
+    public void recordClick(String shortCode, String clientIp, String userAgent, String referer) {
+        UrlData urlData = urlMappings.get(shortCode);
+        if (urlData != null && urlData.isActive()) {
+            urlData.setClickCount(urlData.getClickCount() + 1);
+
+            ClickEvent clickEvent = ClickEvent.builder()
+                    .timestamp(LocalDateTime.now())
+                    .ipAddress(clientIp)
+                    .userAgent(userAgent)
+                    .referer(referer)
+                    .build();
+
+            clickAnalytics.get(shortCode).add(clickEvent);
+            log.debug("Clicked URL: {} -> {}", shortCode, urlData.getOriginalUrl());
+        }
     }
 }
