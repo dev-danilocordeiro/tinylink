@@ -23,7 +23,7 @@ public class UrlData {
     private LocalDateTime expiresAt;
     private String createdBy;
     // Flipped by delete and the cleanup job while redirects read it on other threads.
-    private volatile boolean isActive;
+    private volatile boolean active;
 
     // Redirects record clicks concurrently, so both are thread-safe and only change through recordClick.
     @Setter(AccessLevel.NONE)

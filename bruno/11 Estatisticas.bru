@@ -27,7 +27,6 @@ tests {
   });
 
   test("link está ativo", function () {
-    // Lombok gera isActive() para o campo boolean isActive, e o Jackson serializa como "active".
     expect(res.body.active).to.equal(true);
   });
 }

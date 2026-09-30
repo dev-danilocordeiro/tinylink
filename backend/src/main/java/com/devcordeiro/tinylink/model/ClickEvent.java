@@ -16,6 +16,4 @@ public class ClickEvent {
     private String ipAddress;
     private String userAgent;
     private String referer;
-    private String country;
-    private String city;
 }
