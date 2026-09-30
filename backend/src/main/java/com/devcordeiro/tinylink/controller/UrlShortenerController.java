@@ -1,13 +1,19 @@
 package com.devcordeiro.tinylink.controller;
 
+import com.devcordeiro.tinylink.dto.ShortenUrlRequest;
+import com.devcordeiro.tinylink.dto.ShortenUrlResponse;
 import com.devcordeiro.tinylink.service.RateLimitService;
 import com.devcordeiro.tinylink.service.UrlShortenerService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
-@Service
 @RequestMapping("/api")
 public class UrlShortenerController {
 
@@ -17,5 +23,43 @@ public class UrlShortenerController {
     public UrlShortenerController(UrlShortenerService urlShortenerService, RateLimitService rateLimitService) {
         this.urlShortenerService = urlShortenerService;
         this.rateLimitService = rateLimitService;
+    }
+
+    @PostMapping("/shorten")
+    public ResponseEntity<?> shorten(
+            @Valid @RequestBody ShortenUrlRequest request,
+            HttpServletRequest httpRequest) {
+        String clientIp = getClientIp(httpRequest);
+        if(!rateLimitService.isAllowed(clientIp)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of(
+                            "error", "Rate limit exceeded",
+                            "remainingRequests", rateLimitService.getRemainingRequests(clientIp),
+                            "timeUntilReset", rateLimitService.getTimeUntilReset(clientIp)
+                    ));
+        }
+
+        try {
+            ShortenUrlResponse response = urlShortenerService.shortenUrl(request, clientIp);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private String getClientIp(HttpServletRequest httpRequest) {
+        String xForwardedFor = httpRequest.getHeader("X-Forwarded-For");
+        if(xForwardedFor != null && !xForwardedFor.isEmpty()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+
+        String xRealIp = httpRequest.getHeader("X-Real-IP");
+        if(xRealIp != null && !xRealIp.isEmpty()) {
+            return xRealIp;
+        }
+
+        return httpRequest.getRemoteAddr();
     }
 }
