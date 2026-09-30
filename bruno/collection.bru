@@ -1,5 +1,6 @@
 script:pre-request {
-  // O rate limit é por IP (2/min, 10/h) e o backend confia no X-Forwarded-For.
+  // O rate limit é por IP (2/min, 10/h). O backend só aceita o X-Forwarded-For vindo de
+  // proxy confiável (localhost e redes privadas), o que inclui o Bruno rodando local.
   // Um IP aleatório por requisição evita 429 enquanto se testa as outras rotas.
   const octet = () => Math.floor(Math.random() * 254) + 1;
   req.setHeader("X-Forwarded-For", `10.${octet()}.${octet()}.${octet()}`);

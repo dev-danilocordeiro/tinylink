@@ -1,12 +1,16 @@
 package com.devcordeiro.tinylink.model;
 
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Data
 @Builder
@@ -17,8 +21,25 @@ public class UrlData {
     private String shortCode;
     private LocalDateTime createdAt;
     private LocalDateTime expiresAt;
-    private int clickCount;
     private String createdBy;
-    private boolean isActive;
-    private List<ClickEvent> clickEvents;
+    // Flipped by delete and the cleanup job while redirects read it on other threads.
+    private volatile boolean isActive;
+
+    // Redirects record clicks concurrently, so both are thread-safe and only change through recordClick.
+    @Setter(AccessLevel.NONE)
+    @Builder.Default
+    private AtomicInteger clickCount = new AtomicInteger();
+
+    @Setter(AccessLevel.NONE)
+    @Builder.Default
+    private Queue<ClickEvent> clickEvents = new ConcurrentLinkedQueue<>();
+
+    public int getClickCount() {
+        return clickCount.get();
+    }
+
+    public void recordClick(ClickEvent clickEvent) {
+        clickEvents.add(clickEvent);
+        clickCount.incrementAndGet();
+    }
 }

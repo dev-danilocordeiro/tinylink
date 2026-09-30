@@ -31,11 +31,10 @@ public class UrlShortenerController {
     public ShortenUrlResponse shorten(
             @Valid @RequestBody ShortenUrlRequest request,
             HttpServletRequest httpRequest) {
-        String clientIp = getClientIp(httpRequest);
-        if(!rateLimitService.isAllowed(clientIp)) {
-            throw new RateLimitExceededException(
-                    rateLimitService.getRemainingRequests(clientIp),
-                    rateLimitService.getTimeUntilReset(clientIp));
+        String clientIp = httpRequest.getRemoteAddr();
+        RateLimitService.Decision rateLimit = rateLimitService.tryAcquire(clientIp);
+        if(!rateLimit.allowed()) {
+            throw new RateLimitExceededException(rateLimit.remainingRequests(), rateLimit.secondsUntilReset());
         }
 
         return urlShortenerService.shortenUrl(request, clientIp);
@@ -46,7 +45,7 @@ public class UrlShortenerController {
         String originalUrl = urlShortenerService.getOriginalUrl(shortCode)
                 .orElseThrow(() -> new ShortCodeNotFoundException(shortCode));
 
-        String clientIp = getClientIp(httpRequest);
+        String clientIp = httpRequest.getRemoteAddr();
         String userAgent = httpRequest.getHeader("User-Agent");
         String referer = httpRequest.getHeader("Referer");
         urlShortenerService.recordClick(shortCode, clientIp, userAgent, referer);
@@ -74,19 +73,5 @@ public class UrlShortenerController {
         if(!urlShortenerService.deleteUrl(shortCode)) {
             throw new ShortCodeNotFoundException(shortCode);
         }
-    }
-
-    private String getClientIp(HttpServletRequest httpRequest) {
-        String xForwardedFor = httpRequest.getHeader("X-Forwarded-For");
-        if(xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-
-        String xRealIp = httpRequest.getHeader("X-Real-IP");
-        if(xRealIp != null && !xRealIp.isEmpty()) {
-            return xRealIp;
-        }
-
-        return httpRequest.getRemoteAddr();
     }
 }

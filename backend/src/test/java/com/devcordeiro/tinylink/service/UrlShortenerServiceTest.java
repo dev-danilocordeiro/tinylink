@@ -1,6 +1,7 @@
 package com.devcordeiro.tinylink.service;
 
 import com.devcordeiro.tinylink.dto.ShortenUrlRequest;
+import com.devcordeiro.tinylink.dto.UrlStatsResponse;
 import com.devcordeiro.tinylink.exception.AliasAlreadyExistsException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -80,6 +81,46 @@ class UrlShortenerServiceTest {
 
         assertThat(created).hasValue(1);
         assertThat(rejected).hasValue(threads - 1);
+    }
+
+    @Test
+    void concurrentClicksAreAllCountedAndShowUpInAnalytics() throws Exception {
+        String code = service.shortenUrl(request(null), "1.1.1.1").getShortCode();
+        int threads = 16;
+        int clicksPerThread = 2_000;
+        ExecutorService pool = Executors.newFixedThreadPool(threads + 1);
+        CountDownLatch start = new CountDownLatch(1);
+
+        List<Future<?>> futures = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            futures.add(pool.submit(() -> {
+                start.await();
+                for (int c = 0; c < clicksPerThread; c++) {
+                    service.recordClick(code, "10.0.0.1", "agent", "https://ref.example");
+                }
+                return null;
+            }));
+        }
+        // Reading analytics while clicks are written must not throw ConcurrentModificationException.
+        futures.add(pool.submit(() -> {
+            start.await();
+            for (int r = 0; r < 200; r++) {
+                service.getUrlAnalytics(code);
+            }
+            return null;
+        }));
+        start.countDown();
+        for (Future<?> f : futures) {
+            f.get();
+        }
+        pool.shutdown();
+
+        int expected = threads * clicksPerThread;
+        assertThat(service.getUrlStats(code)).get().extracting(UrlStatsResponse::getClickCount).isEqualTo(expected);
+        assertThat(service.getUrlAnalytics(code)).get().satisfies(analytics -> {
+            assertThat(analytics.getTotalClicks()).isEqualTo(expected);
+            assertThat(analytics.getClicksByReferer()).containsEntry("https://ref.example", expected);
+        });
     }
 
     @Test
