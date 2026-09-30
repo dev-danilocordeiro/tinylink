@@ -12,10 +12,30 @@ holds the redirect cache and the rate-limit counters.
 
 ## Running
 
-From the repository root, start Redis (and Redis Commander on http://localhost:8081):
+### Everything in Docker
+
+From the repository root:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
+```
+
+| Service         | URL                    |
+|-----------------|------------------------|
+| Frontend        | http://localhost:8082  |
+| API             | http://localhost:8080  |
+| Redis Commander | http://localhost:8081  |
+
+The frontend's nginx proxies `/api` to the backend. Set `BACKEND_PORT` or `FRONTEND_PORT` to
+publish on other ports, and `TZ` if you're not in `America/Sao_Paulo`: `expiresAt` is a local
+date-time read in the backend's time zone.
+
+### Backend from source
+
+Start only Redis (and Redis Commander on http://localhost:8081):
+
+```bash
+docker compose up -d redis redis-commander
 ```
 
 Then start the API on http://localhost:8080:
