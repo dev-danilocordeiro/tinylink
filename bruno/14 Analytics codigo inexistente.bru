@@ -15,7 +15,9 @@ tests {
     expect(res.getStatus()).to.equal(404);
   });
 
-  test("explica que o código não existe", function () {
-    expect(res.body.error).to.equal("short code not found");
+  test("responde com ProblemDetail explicando que o código não existe", function () {
+    expect(res.getHeader("content-type")).to.contain("application/problem+json");
+    expect(res.body.title).to.equal("Short code not found");
+    expect(res.body.shortCode).to.equal("naoexiste123");
   });
 }

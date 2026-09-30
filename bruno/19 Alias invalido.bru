@@ -1,0 +1,29 @@
+meta {
+  name: Alias inválido
+  type: http
+  seq: 19
+}
+
+post {
+  url: {{baseUrl}}/api/shorten
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "originalUrl": "https://example.com",
+    "customAlias": "com/barra"
+  }
+}
+
+tests {
+  test("retorna 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+
+  test("aponta o customAlias como campo inválido", function () {
+    expect(res.body.title).to.equal("Invalid request");
+    expect(res.body.errors[0].field).to.equal("customAlias");
+  });
+}

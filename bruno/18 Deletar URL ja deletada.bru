@@ -1,0 +1,25 @@
+meta {
+  name: Deletar URL já deletada
+  type: http
+  seq: 18
+}
+
+delete {
+  url: {{baseUrl}}/api/{{shortCode}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("retorna 404", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+
+  test("responde com ProblemDetail", function () {
+    expect(res.body.title).to.equal("Short code not found");
+  });
+}
+
+docs {
+  Depende de **Deletar URL** ter rodado antes (usa `{{shortCode}}`).
+}

@@ -27,10 +27,14 @@ tests {
   });
 
   if (res.getStatus() === 429) {
-    test("corpo do 429 traz o erro, 0 restantes e o tempo até liberar", function () {
-      expect(res.body.error).to.equal("Rate limit exceeded");
+    test("ProblemDetail do 429 traz 0 restantes e o tempo até liberar", function () {
+      expect(res.body.title).to.equal("Rate limit exceeded");
       expect(res.body.remainingRequests).to.equal(0);
       expect(res.body.timeUntilReset).to.be.above(0);
+    });
+
+    test("header Retry-After bate com timeUntilReset", function () {
+      expect(res.getHeader("retry-after")).to.equal(String(res.body.timeUntilReset));
     });
   }
 }
