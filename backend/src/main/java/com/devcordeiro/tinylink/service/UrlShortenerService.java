@@ -146,18 +146,28 @@ public class UrlShortenerService {
     }
 
     public Optional<String> getOriginalUrl(String shortCode) {
+        UrlData urlData = urlMappings.get(shortCode);
         String cachedUrl = getCachedUrl(shortCode);
         if (cachedUrl != null) {
+            // A cache entry left behind by a failed delete must not keep a deleted link redirecting.
+            if (urlData != null && !urlData.isActive()) {
+                deleteCacheUrl(shortCode);
+                return Optional.empty();
+            }
             return Optional.of(cachedUrl);
         }
 
-        UrlData urlData = urlMappings.get(shortCode);
         if (urlData != null && urlData.isActive()) {
             if(isExpired(urlData)) {
                 urlData.setActive(false);
                 return Optional.empty();
             }
             cacheUrl(shortCode, urlData.getOriginalUrl(), urlData.getExpiresAt());
+            // deleteUrl may have run between the check above and cacheUrl: undo the re-cached entry.
+            if (!urlData.isActive()) {
+                deleteCacheUrl(shortCode);
+                return Optional.empty();
+            }
             return Optional.of(urlData.getOriginalUrl());
         }
         return Optional.empty();
