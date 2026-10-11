@@ -15,6 +15,8 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -24,6 +26,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -217,5 +222,87 @@ class UrlShortenerServiceTest {
     @Test
     void deletingAnUnknownLinkFails() {
         assertThat(service.deleteUrl("nope")).isFalse();
+    }
+    /** Backs the mocked Redis with a map; {@code beforeSet} runs before each write lands. */
+    @SuppressWarnings("unchecked")
+    private UrlShortenerService serviceWithFakeRedis(Map<String, Object> redis, Runnable beforeSet) {
+        RedisTemplate<String, Object> redisTemplate = mock(RedisTemplate.class);
+        ValueOperations<String, Object> ops = mock(ValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(ops);
+        when(ops.get(anyString())).thenAnswer(inv -> redis.get(inv.<String>getArgument(0)));
+        doAnswer(inv -> {
+            beforeSet.run();
+            redis.put(inv.getArgument(0), inv.getArgument(1));
+            return null;
+        }).when(ops).set(anyString(), any(), any(Duration.class));
+        when(redisTemplate.delete(anyString())).thenAnswer(inv -> redis.remove(inv.<String>getArgument(0)) != null);
+        return new UrlShortenerService(redisTemplate, clock, "http://localhost:8080", 6, 10, 30);
+    }
+
+    @Test
+    void deleteRunningBetweenRedirectReadAndCacheWriteDoesNotLeaveTheLinkCached() {
+        Map<String, Object> redis = new ConcurrentHashMap<>();
+        String[] code = new String[1];
+        boolean[] armed = new boolean[1];
+        UrlShortenerService[] holder = new UrlShortenerService[1];
+        // Simulates deleteUrl finishing after the redirect read urlData but before its cache write lands.
+        UrlShortenerService svc = serviceWithFakeRedis(redis, () -> {
+            if (armed[0]) {
+                armed[0] = false;
+                assertThat(holder[0].deleteUrl(code[0])).isTrue();
+            }
+        });
+        holder[0] = svc;
+        code[0] = svc.shortenUrl(request(null), "1.1.1.1").getShortCode();
+        redis.clear();
+        armed[0] = true;
+
+        svc.getOriginalUrl(code[0]);
+
+        assertThat(redis).doesNotContainKey("url:" + code[0]);
+        assertThat(svc.getOriginalUrl(code[0])).isEmpty();
+    }
+
+    @Test
+    void deletedLinkIsNotCachedEvenWithConcurrentRedirects() throws Exception {
+        Map<String, Object> redis = new ConcurrentHashMap<>();
+        UrlShortenerService svc = serviceWithFakeRedis(redis, Thread::yield);
+        for (int round = 0; round < 50; round++) {
+            String code = svc.shortenUrl(request(null), "1.1.1.1").getShortCode();
+            redis.clear();
+            ExecutorService pool = Executors.newFixedThreadPool(8);
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<?>> futures = new ArrayList<>();
+            for (int i = 0; i < 8; i++) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    for (int r = 0; r < 100; r++) {
+                        svc.getOriginalUrl(code);
+                    }
+                    return null;
+                }));
+            }
+            start.countDown();
+            assertThat(svc.deleteUrl(code)).isTrue();
+            for (Future<?> f : futures) {
+                f.get();
+            }
+            pool.shutdown();
+
+            assertThat(redis).doesNotContainKey("url:" + code);
+            assertThat(svc.getOriginalUrl(code)).isEmpty();
+        }
+    }
+
+    @Test
+    void cacheEntryLeftByAFailedDeleteDoesNotRedirect() {
+        Map<String, Object> redis = new ConcurrentHashMap<>();
+        UrlShortenerService svc = serviceWithFakeRedis(redis, () -> { });
+        String code = svc.shortenUrl(request(null), "1.1.1.1").getShortCode();
+        svc.deleteUrl(code);
+        redis.put("url:" + code, "https://example.com"); // as if the delete had failed
+
+        assertThat(svc.getOriginalUrl(code)).isEmpty();
+        assertThat(redis).doesNotContainKey("url:" + code);
     }
 }
