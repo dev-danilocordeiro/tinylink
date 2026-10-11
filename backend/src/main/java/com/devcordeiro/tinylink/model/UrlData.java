@@ -24,8 +24,11 @@ public class UrlData {
     private String createdBy;
     // Flipped by delete and the cleanup job while redirects read it on other threads.
     private volatile boolean active;
+    // Set by delete; with expiresAt it tells cleanup when the retention period starts.
+    private volatile Instant deletedAt;
 
     // Redirects record clicks concurrently, so both are thread-safe and only change through recordClick.
+    // clickCount counts every click; clickEvents keeps only the most recent ones, up to a limit.
     @Setter(AccessLevel.NONE)
     @Builder.Default
     private AtomicInteger clickCount = new AtomicInteger();
@@ -38,8 +41,11 @@ public class UrlData {
         return clickCount.get();
     }
 
-    public void recordClick(ClickEvent clickEvent) {
+    public void recordClick(ClickEvent clickEvent, int maxEvents) {
         clickEvents.add(clickEvent);
-        clickCount.incrementAndGet();
+        // One poll per click past the limit keeps the queue bounded without an O(n) size() call.
+        if (clickCount.incrementAndGet() > maxEvents) {
+            clickEvents.poll();
+        }
     }
 }

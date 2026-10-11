@@ -63,12 +63,15 @@ class UrlShortenerServiceTest {
     private UrlShortenerService service;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     void setUp() {
+        service = newService(50_000);
+    }
+
+    @SuppressWarnings("unchecked")
+    private UrlShortenerService newService(int maxClickEventsPerUrl) {
         RedisTemplate<String, Object> redisTemplate = mock(RedisTemplate.class);
         when(redisTemplate.opsForValue()).thenReturn(mock(ValueOperations.class));
-
-        service = new UrlShortenerService(redisTemplate, clock, "http://localhost:8080", 6, 10, 30);
+        return new UrlShortenerService(redisTemplate, clock, "http://localhost:8080", 6, 10, 30, 24, maxClickEventsPerUrl);
     }
 
     private static ShortenUrlRequest request(String alias) {
@@ -110,6 +113,38 @@ class UrlShortenerServiceTest {
         assertThat(isActive(expired)).isFalse();
         assertThat(isActive(stillValid)).isTrue();
         assertThat(isActive(neverExpires)).isTrue();
+    }
+
+    @Test
+    void cleanupRemovesExpiredAndDeletedLinksOnceRetentionHasPassed() {
+        String expired = shortenExpiringIn(Duration.ofHours(1));
+        String deleted = shortenExpiringIn(null);
+        service.deleteUrl(deleted);
+
+        clock.advance(Duration.ofHours(2));
+        service.cleanupExpiredUrls();
+        assertThat(service.getUrlStats(expired)).isPresent();
+        assertThat(service.getUrlStats(deleted)).isPresent();
+
+        clock.advance(Duration.ofHours(24));
+        service.cleanupExpiredUrls();
+        assertThat(service.getUrlStats(expired)).isEmpty();
+        assertThat(service.getUrlStats(deleted)).isEmpty();
+    }
+
+    @Test
+    void clickEventsAreCappedPerUrlButClickCountKeepsEveryClick() {
+        service = newService(3);
+        String code = shortenExpiringIn(null);
+        for (int i = 0; i < 10; i++) {
+            service.recordClick(code, "10.0.0.1", "agent", null);
+        }
+
+        assertThat(service.getUrlStats(code)).get().extracting(UrlStatsResponse::getClickCount).isEqualTo(10);
+        assertThat(service.getUrlAnalytics(code)).get().satisfies(analytics -> {
+            assertThat(analytics.getTotalClicks()).isEqualTo(10);
+            assertThat(analytics.getRecentClicks()).hasSize(3);
+        });
     }
 
     @Test
