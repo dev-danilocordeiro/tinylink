@@ -33,6 +33,8 @@ public class UrlShortenerService {
     private final int shortCodeLength;
     private final int maxGenerationAttempts;
     private final int cacheTtlMinutes;
+    private final Duration retention;
+    private final int maxClickEventsPerUrl;
 
     private final Map<String, UrlData> urlMappings = new ConcurrentHashMap<>();
 
@@ -42,13 +44,17 @@ public class UrlShortenerService {
             @Value("${tinylink.base-url}") String baseUrl,
             @Value("${tinylink.short-code.length}") int shortCodeLength,
             @Value("${tinylink.short-code.max-attempts}") int maxGenerationAttempts,
-            @Value("${tinylink.cache.ttl-minutes}") int cacheTtlMinutes) {
+            @Value("${tinylink.cache.ttl-minutes}") int cacheTtlMinutes,
+            @Value("${tinylink.cleanup.retention-hours:24}") int retentionHours,
+            @Value("${tinylink.clicks.max-events-per-url:1000}") int maxClickEventsPerUrl) {
         this.redisTemplate = redisTemplate;
         this.clock = clock;
         this.baseUrl = baseUrl;
         this.shortCodeLength = shortCodeLength;
         this.maxGenerationAttempts = maxGenerationAttempts;
         this.cacheTtlMinutes = cacheTtlMinutes;
+        this.retention = Duration.ofHours(retentionHours);
+        this.maxClickEventsPerUrl = maxClickEventsPerUrl;
     }
 
     private static final String BASE_62_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -178,7 +184,7 @@ public class UrlShortenerService {
                     .ipAddress(clientIp)
                     .userAgent(userAgent)
                     .referer(referer)
-                    .build());
+                    .build(), maxClickEventsPerUrl);
             log.debug("Clicked URL: {} -> {}", shortCode, urlData.getOriginalUrl());
         }
     }
@@ -246,7 +252,7 @@ public class UrlShortenerService {
                         .createdAt(urlData.getCreatedAt())
                         .expiresAt(urlData.getExpiresAt())
                         .originalUrl(urlData.getOriginalUrl())
-                        .totalClicks(clickEvents.size())
+                        .totalClicks(urlData.getClickCount())
                         .recentClicks(recentClicks)
                         .clicksByDay(clicksByDay)
                         .clicksByHour(clicksByHour)
@@ -258,6 +264,7 @@ public class UrlShortenerService {
     public boolean deleteUrl(String shortCode) {
         UrlData urlData = urlMappings.get(shortCode);
         if (urlData != null && urlData.isActive()) {
+            urlData.setDeletedAt(Instant.now(clock));
             urlData.setActive(false);
             deleteCacheUrl(shortCode);
             log.info("Deleted URL: {} -> {}", shortCode, urlData.getOriginalUrl());
@@ -276,6 +283,7 @@ public class UrlShortenerService {
 
     public void cleanupExpiredUrls() {
         int cleanedCount = 0;
+        int removedCount = 0;
         Instant now = Instant.now(clock);
 
         for (Map.Entry<String, UrlData> entry : urlMappings.entrySet()) {
@@ -285,10 +293,17 @@ public class UrlShortenerService {
                 deleteCacheUrl(entry.getKey());
                 cleanedCount++;
             }
+            // Inactive links stay visible in stats for the retention period, then are dropped to free memory.
+            Instant inactiveSince = urlData.getDeletedAt() != null ? urlData.getDeletedAt() : urlData.getExpiresAt();
+            if (!urlData.isActive() && inactiveSince != null && inactiveSince.plus(retention).isBefore(now)
+                    && urlMappings.remove(entry.getKey(), urlData)) {
+                removedCount++;
+            }
         }
 
-        if (cleanedCount > 0) {
-            log.info("Deactivated {} expired URLs ({} URLs in total)", cleanedCount, urlMappings.size());
+        if (cleanedCount > 0 || removedCount > 0) {
+            log.info("Deactivated {} expired and removed {} inactive URLs ({} URLs in total)",
+                    cleanedCount, removedCount, urlMappings.size());
         }
     }
 }
