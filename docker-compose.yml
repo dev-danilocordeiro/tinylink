@@ -3,7 +3,8 @@ services:
     image: redis:7-alpine
     container_name: tinylink-redis
     ports:
-      - "6379:6379"
+      # Dev only: Redis has no password, so publish it on loopback only.
+      - "127.0.0.1:6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
@@ -15,12 +16,14 @@ services:
     restart: unless-stopped
 
   redis-commander:
-    image: rediscommander/redis-commander:latest
+    # No version tags are published; pinned by digest (app version 0.7.2-rc3).
+    image: rediscommander/redis-commander@sha256:19cd0c49f418779fa2822a0496c5e6516d0c792effc39ed20089e6268477e40a
     container_name: tinylink-redis-commander
+    profiles: ["debug"]
     environment:
       REDIS_HOSTS: tinylink:redis:6379
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
     depends_on:
       redis:
         condition: service_healthy

@@ -24,18 +24,19 @@ docker compose up -d --build
 |-----------------|------------------------|
 | Frontend        | http://localhost:8082  |
 | API             | http://localhost:8080  |
-| Redis Commander | http://localhost:8081  |
 
 The frontend's nginx proxies `/api` to the backend. Set `BACKEND_PORT` or `FRONTEND_PORT` to
 publish on other ports, and `TZ` if you're not in `America/Sao_Paulo`: analytics group clicks
-by hour and day in the backend's time zone.
+by hour and day in the backend's time zone. Redis (6379) has no password and is published on
+`127.0.0.1` only. Redis Commander is in the `debug` profile: add `--profile debug` to start it
+on http://localhost:8081 (also loopback only).
 
 ### Backend from source
 
 Start only Redis (and Redis Commander on http://localhost:8081):
 
 ```bash
-docker compose up -d redis redis-commander
+docker compose --profile debug up -d redis redis-commander
 ```
 
 Then start the API on http://localhost:8080:
